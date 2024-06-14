@@ -1,8 +1,13 @@
 package com.mybank.gui;
 
+import com.mybank.domain.Account;
 import com.mybank.domain.Bank;
+import com.mybank.domain.Customer;
 import com.mybank.domain.CheckingAccount;
 import com.mybank.domain.SavingsAccount;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -95,6 +100,9 @@ public class FXDemo extends Application {
 
         Button buttonShow = new Button("Show");
         buttonShow.setPrefSize(100, 20);
+        
+        Button buttonReport = new Button("Report");
+        buttonReport.setPrefSize(100, 20);
 
         buttonShow.setOnAction(new EventHandler<ActionEvent>() {
 
@@ -102,10 +110,21 @@ public class FXDemo extends Application {
             public void handle(ActionEvent event) {
                 try {
                     int custNo = clients.getItems().indexOf(clients.getValue());
-                    int accNo = 0;
                     title.setText(clients.getValue().toString());
-                    String accType = Bank.getCustomer(custNo).getAccount(accNo) instanceof CheckingAccount ? "Checking" : "Savings";
-                    details.setText("Account:\t\t#" + accNo + "\nAcc Type:\t" + accType + "\nBalance:\t\t$" + Bank.getCustomer(custNo).getAccount(accNo).getBalance());
+                    int numberOfAccounts = Bank.getCustomer(custNo).getNumberOfAccounts();
+                    StringBuilder detailsText = new StringBuilder();
+                    for (int accNo = 0; accNo < numberOfAccounts; accNo++) {
+                        String accType = Bank.getCustomer(custNo).getAccount(accNo) instanceof CheckingAccount ? "Checking" : "Savings";
+                        detailsText.append("Account:\t\t#")
+                        .append(accNo)
+                        .append("\nAcc Type:\t")
+                        .append(accType)
+                        .append("\nBalance:\t\t$")
+                        .append(Bank.getCustomer(custNo).getAccount(accNo).getBalance())
+                        .append("\n\n");
+                }
+                details.setText(detailsText.toString());
+                    
                 } catch (Exception e) {
                     Alert alert = new Alert(AlertType.ERROR);
                     alert.setTitle("Error getting client...");
@@ -117,11 +136,59 @@ public class FXDemo extends Application {
                 }
             }
         });
+        
+        buttonReport.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event) {
+                try {
+                    title.setText("CUSTOMERS REPORT");
+                    String customers = "";
+                    String customerName = "";
+                    String account_type = "";
 
-        hbox.getChildren().addAll(clients, buttonShow);
+                    for (int cust_idx = 0;
+                            cust_idx < Bank.getNumberOfCustomers();
+                            cust_idx++) {
+                        Customer customer = Bank.getCustomer(cust_idx);
+                        customerName = customer.getFirstName() + ", " + customer.getLastName();
+
+                        for (int acct_idx = 0;
+                                acct_idx < customer.getNumberOfAccounts();
+                                acct_idx++) {
+                            Account account = customer.getAccount(acct_idx);
+
+                            if (account instanceof SavingsAccount) {
+                                account_type = "Savings Account";
+                            } else if (account instanceof CheckingAccount) {
+                                account_type = "Checking Account";
+                            } else {
+                                account_type = "Unknown Account Type";
+                            }
+
+                            customers += customerName + "\nAcc type: " + account_type + "\nBalance: $" + account.getBalance() + "\n\n";
+                        }
+                    }
+                    String report = "\n" + customers;
+                    details.setText(report);
+                    
+                } catch (Exception e) {
+                    Alert alert = new Alert(AlertType.ERROR);
+                    alert.setTitle("Error getting client...");
+                    // Header Text: null
+                    alert.setHeaderText(null);
+                    String details = e.getMessage() != null ? e.getMessage() : "You need to choose a client first!";
+                    alert.setContentText("Error details: " + details);
+                    alert.showAndWait();
+                }
+            }
+        });   
+
+
+        hbox.getChildren().addAll(clients, buttonShow, buttonReport);
 
         return hbox;
     }
+ 
 
     public void addStackPane(HBox hb) {
         StackPane stack = new StackPane();
@@ -170,17 +237,46 @@ public class FXDemo extends Application {
         alert.setContentText("Just a simple JavaFX demo.\nCopyright \u00A9 2019 Alexander \'Taurus\' Babich");
         alert.showAndWait();
     }
+    
+    private static void readCustomers(){
+        try (BufferedReader br = new BufferedReader(new FileReader("src/data/test.dat"))) {
+            int numberOfCustomers = Integer.parseInt(br.readLine());
+            for (int i = 0; i < numberOfCustomers; i++) {
+                br.readLine();
+                String[] customerInfo = br.readLine().split("\t");
+
+                Bank.addCustomer(customerInfo[0], customerInfo[1]);
+                
+                int numberOfAccounts = Integer.parseInt(customerInfo[2]);
+                
+                Customer customer = Bank.getCustomer(i);
+
+                for (int j = 0; j < numberOfAccounts; j++) {
+                    String[] accountInfo = br.readLine().split("\t");
+                    String accountType = accountInfo[0];
+                    double balance = Double.parseDouble(accountInfo[1]);
+                    switch (accountType) {
+                        case "S":
+                            double interestRate = Double.parseDouble(accountInfo[2]);
+                            customer.addAccount(new SavingsAccount(balance, interestRate));
+                            break;
+                        case "C":
+                            double overdraftAmount = Double.parseDouble(accountInfo[2]);
+                            customer.addAccount(new CheckingAccount(balance, overdraftAmount));
+                            break;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
     /**
      * @param args the command line arguments
      */
     public static void main(String[] args) {
-        Bank.addCustomer("John", "Doe");
-        Bank.getCustomer(0).addAccount(new SavingsAccount(100, 2));
-        Bank.addCustomer("Fox", "Mulder");
-        Bank.getCustomer(1).addAccount(new CheckingAccount(1000, 500));
-        Bank.addCustomer("Dana", "Scully");
-        Bank.getCustomer(2).addAccount(new CheckingAccount(1060));
+         readCustomers();
 
         launch(args);
     }
